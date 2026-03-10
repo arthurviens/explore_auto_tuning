@@ -1,0 +1,30 @@
+# RL Auto-Tuning for TVM 0.23.0
+# Install with: pip install -r requirements.txt
+# TVM and tvm-ffi must be installed separately (already in rltvm312 venv)
+
+# Core ML/RL
+stable-baselines3>=2.3.0
+gymnasium>=0.29.0
+torch>=2.2.0 --index-url https://download.pytorch.org/whl/cpu
+numpy>=1.24.0,<2.0.0
+
+# Visualization & notebooks
+matplotlib>=3.7.0
+jupyter>=1.0.0
+ipywidgets>=8.0.0
+
+# Evaluation & analysis
+scipy>=1.10.0
+pandas>=2.0.0
+
+# TVM runtime dependencies
+psutil>=5.9.0
+cloudpickle>=2.2.0
+xgboost>=1.7.0
+
+# Testing
+pytest>=7.0.0
+
+# Utilities
+tqdm>=4.65.0
+tensorboard>=2.14.0
