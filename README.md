@@ -44,6 +44,6 @@ Extremely good tutorial : [MLC Course](https://book.mlc.ai/) (chapters 1 to 4)
 Approximative planning to have vision over the next weeks, **however**, you're free to deviate from it.
 
 * Weeks 1 & 2 : Learning the context, reading general bibliography, install the environment and the tools.
-* Weeks 3 & 4 : Experiments regarding code transformations, and TVM's auto-tuning + reading auto-tuning related bibliography. 
+* Weeks 3 & 4 : Experiments regarding code transformations, TVM's auto-tuning + reading auto-tuning related bibliography. 
 * Weeks 5 & 6 : Experiments regarding auto-tuning with a reinforcement algorithm + reading reinforcement learning for auto-tuning related bibliography
-* Weeks 7 : Analysis of the experiments results, what works, what doesn't and why, report redaction.
+* Weeks 7 : Analysis of the experiments results, report redaction.
