@@ -148,6 +148,66 @@ class _Conv2dBiasAdd56:
 
 
 # ---------------------------------------------------------------------------
+# TinyYOLOv2 conv7: 3×3 conv (512 → 1024) @ 13×13 + bias + LeakyReLU(0.1)
+#
+# This mirrors the fused kernel shape produced by the Relax pipeline
+# (FuseOps + FuseTIR) on the TinyYOLOv2 ONNX model. The conv is the most
+# expensive layer of the network (~1.6 GFLOPs). Stride=1, pad=1 keeps the
+# output at 13×13.
+#
+# Three blocks: pad → conv → bias+leaky. Multi-block on purpose — gives
+# AutoInline and RandomComputeLocation something to do.
+# ---------------------------------------------------------------------------
+
+@tvm.script.ir_module
+class _TinyYoloV2Conv7BiasLeaky:
+    @T.prim_func
+    def main(a: T.handle, w: T.handle, bias: T.handle, b: T.handle) -> None:
+        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        A    = T.match_buffer(a,    (1, 512, 13, 13),   "float32")
+        W    = T.match_buffer(w,    (1024, 512, 3, 3),  "float32")
+        Bias = T.match_buffer(bias, (1024,),            "float32")
+        B    = T.match_buffer(b,    (1, 1024, 13, 13),  "float32")
+
+        Pad  = T.alloc_buffer(      (1, 512, 15, 15),   "float32")
+        Conv = T.alloc_buffer(      (1, 1024, 13, 13),  "float32")
+
+        # Explicit zero-padding block (pad=1 on H,W)
+        for n, c, h, w_ in T.grid(1, 512, 15, 15):
+            with T.block("pad"):
+                vn, vc, vh, vw = T.axis.remap("SSSS", [n, c, h, w_])
+                Pad[vn, vc, vh, vw] = T.if_then_else(
+                    T.likely(1 <= vh) and T.likely(vh < 14)
+                    and T.likely(1 <= vw) and T.likely(vw < 14),
+                    A[vn, vc, vh - 1, vw - 1],
+                    T.float32(0.0),
+                )
+
+        # Convolution (stride=1, input already padded)
+        for n, co, oh, ow, ci, kh, kw in T.grid(1, 1024, 13, 13, 512, 3, 3):
+            with T.block("conv"):
+                vn, vco, voh, vow, vci, vkh, vkw = T.axis.remap(
+                    "SSSSRRR", [n, co, oh, ow, ci, kh, kw]
+                )
+                with T.init():
+                    Conv[vn, vco, voh, vow] = T.float32(0.0)
+                Conv[vn, vco, voh, vow] = (
+                    Conv[vn, vco, voh, vow]
+                    + Pad[vn, vci, voh + vkh, vow + vkw]
+                    * W[vco, vci, vkh, vkw]
+                )
+
+        # Fused bias-add + LeakyReLU(alpha=0.1)
+        for n, co, oh, ow in T.grid(1, 1024, 13, 13):
+            with T.block("bias_leaky"):
+                vn, vco, voh, vow = T.axis.remap("SSSS", [n, co, oh, ow])
+                v = Conv[vn, vco, voh, vow] + Bias[vco]
+                B[vn, vco, voh, vow] = T.if_then_else(
+                    v > T.float32(0.0), v, v * T.float32(0.1)
+                )
+
+
+# ---------------------------------------------------------------------------
 # Workload registry
 # ---------------------------------------------------------------------------
 
@@ -161,6 +221,10 @@ _WORKLOAD_REGISTRY = {
     "conv2d_bias_add_56": (_Conv2dBiasAdd56, 56,
         2 * 1 * 64 * 54 * 54 * 64 * 3 * 3              # conv
         + 2 * 1 * 64 * 54 * 54),                        # bias + residual add
+    # TinyYOLOv2 conv7: 3×3 conv (512→1024) @ 13×13 + bias + LeakyReLU
+    "tinyolov2_conv7_bias_leaky": (_TinyYoloV2Conv7BiasLeaky, 13,
+        2 * 1 * 1024 * 13 * 13 * 512 * 3 * 3           # conv  (~1.57 GFLOPs)
+        + 2 * 1 * 1024 * 13 * 13),                      # bias + leaky
 }
 
 
